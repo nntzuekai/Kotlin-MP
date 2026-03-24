@@ -24,14 +24,14 @@ application {
 }
 
 // 3. The Compiler Hook: Inject the plugin during the compile task
-// tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-//     // Ensure the compiler module is built BEFORE we try to compile the tests
-//     dependsOn(myCompilerPlugin) 
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+    // Ensure the compiler module is built BEFORE we try to compile the tests
+    dependsOn(myCompilerPlugin) 
     
-//     doFirst {
-//         // Find the compiled JAR file of your compiler plugin
-//         val pluginJars = myCompilerPlugin.files.map { "-Xplugin=${it.absolutePath}" }
-//         // Pass it to the Kotlin compiler
-//         kotlinOptions.freeCompilerArgs += pluginJars
-//     }
-// }
+    doFirst {
+        // Find the compiled JAR file of your compiler plugin
+        val pluginJars = myCompilerPlugin.files.map { "-Xplugin=${it.absolutePath}" }
+        // Pass it to the Kotlin compiler
+        kotlinOptions.freeCompilerArgs += pluginJars
+    }
+}
