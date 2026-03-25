@@ -16,7 +16,7 @@ class StaticScheduleTests {
 
         // This should trigger executeParallelProgressionStatic
         omp {
-            parallelFor(18 downTo 0 step 2, Schedule.Static()) { i ->
+            parallelFor(18 downTo 0 step 2, Schedule.Static) { i ->
                 println("Progression Index $i processed by: ${Thread.currentThread().name}")
                 c[i] = a[i] + b[i]
             }
@@ -47,7 +47,7 @@ class StaticScheduleTests {
 
         // This should trigger executeParallelRangeStatic
         omp {
-            parallelFor(0 until size, Schedule.Static()) { i ->
+            parallelFor(0 until size, Schedule.Static) { i ->
                 println("Range Index $i processed by: ${Thread.currentThread().name}")
                 c[i] = a[i] + b[i]
                 if (c[i] % 3 == 0) sharedList.add(c[i])

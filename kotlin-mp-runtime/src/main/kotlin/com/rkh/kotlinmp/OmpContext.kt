@@ -13,7 +13,7 @@ class OmpContext {
     // Fast Path: For standard ranges (0 until 20)
     inline fun parallelFor(
         range: IntRange,
-        schedule: Schedule = Schedule.Static(),
+        schedule: Schedule = Schedule.Static,
         crossinline block: (Int) -> Unit
     ) {
         // SEQUENTIAL FALLBACK: 
@@ -27,7 +27,7 @@ class OmpContext {
     // Slow Path: For custom steps (20 downTo 0 step 2)
     inline fun parallelFor(
         progression: IntProgression,
-        schedule: Schedule = Schedule.Static(),
+        schedule: Schedule = Schedule.Static,
         crossinline block: (Int) -> Unit
     ) {
         for (i in progression) {
@@ -72,7 +72,10 @@ fun executeParallelRangeStatic(range: IntRange, schedule: Schedule, block: (Int)
 
     // equivalent to Math.ceil(1.0*totalElements/numThreads)
     // Safely extract the chunk size, defaulting to 0 if they passed something else by accident
-    val userChunkSize = if (schedule as? Schedule.Static != null) schedule.chunkSize else 0
+    val userChunkSize = when (schedule) {
+        is Schedule.CustomStatic -> schedule.chunkSize
+        else -> 0 // Both Schedule.Static and Schedule.Dynamic fall back to 0 (Auto-Block)
+    }
 
     val tasks = if (userChunkSize <= 0) {
         val cSize = (totalElements + numThreads - 1) / numThreads
@@ -134,7 +137,10 @@ fun executeParallelProgressionStatic(progression: IntProgression, schedule: Sche
 
     // equivalent to Math.ceil(1.0*totalElements/numThreads)
     // Safely extract the chunk size, defaulting to 0 if they passed something else by accident
-    val userChunkSize = if (schedule as? Schedule.Static != null) schedule.chunkSize else 0
+    val userChunkSize = when (schedule) {
+        is Schedule.CustomStatic -> schedule.chunkSize
+        else -> 0 // Both Schedule.Static and Schedule.Dynamic fall back to 0 (Auto-Block)
+    }
 
     val tasks = if (userChunkSize <= 0) {
         val cSize = (totalElements + numThreads - 1) / numThreads
