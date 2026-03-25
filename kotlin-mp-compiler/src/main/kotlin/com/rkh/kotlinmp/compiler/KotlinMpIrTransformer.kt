@@ -7,6 +7,7 @@ import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.impl.IrCallImpl
+import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.CallableId
 import org.jetbrains.kotlin.name.Name
@@ -24,21 +25,31 @@ class KotlinMpIrTransformer(
         // Strictly check the fully qualified name
         if (fullFunctionName == "com.rkh.kotlinmp.OmpContext.parallelFor") {
 
+            // Look at the first parameter of the function the user called
+            val firstParamType = expression.symbol.owner.valueParameters[0].type.classFqName?.asString()
+
+            // Decide which trampoline to use based on the parameter type!
+            val targetTrampolineName = if (firstParamType == "kotlin.ranges.IntRange") {
+                "executeParallelRangeStatic"
+            } else {
+                "executeParallelProgressionStatic"
+            }
+
             messageCollector.report(
                 CompilerMessageSeverity.WARNING,
-                "-> Rewriting '$fullFunctionName' into ForkJoinPool task!"
+                "-> Routing to highly-optimized $targetTrampolineName"
             )
 
             // 1. Find our hidden Trampoline function using CallableId (The modern 1.9+ way)
             val callableId = CallableId(
                 packageName = FqName("com.rkh.kotlinmp"),
-                callableName = Name.identifier("executeParallelStatic")
+                callableName = Name.identifier(targetTrampolineName)
             )
 
             val supportFunctionSymbol = pluginContext.referenceFunctions(callableId).singleOrNull()
 
             if (supportFunctionSymbol == null) {
-                messageCollector.report(CompilerMessageSeverity.ERROR, "Could not find executeParallelStatic!")
+                messageCollector.report(CompilerMessageSeverity.ERROR, "Could not find $targetTrampolineName!")
                 return super.visitCall(expression)
             }
 

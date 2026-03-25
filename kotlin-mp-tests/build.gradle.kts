@@ -1,6 +1,5 @@
 plugins {
     kotlin("jvm")
-    id("application")
 }
 
 group = "com.rkh.kotlinmp"
@@ -17,21 +16,28 @@ dependencies {
     
     // 2. Tell Gradle that our custom configuration depends on the compiler module
     myCompilerPlugin(project(":kotlin-mp-compiler"))
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
 }
 
-application {
-    mainClass.set("com.rkh.kotlinmp.tests.StaticScheduleKt")
+tasks.withType<Test> {
+    useJUnitPlatform()
+
+    // This ensures our standard output (printlns) shows up in the terminal during tests
+    testLogging {
+        events("passed", "skipped", "failed", "standardOut", "standardError")
+    }
 }
 
 // 3. The Compiler Hook: Inject the plugin during the compile task
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    // Ensure the compiler module is built BEFORE we try to compile the tests
-    dependsOn(myCompilerPlugin) 
-    
-    doFirst {
-        // Find the compiled JAR file of your compiler plugin
-        val pluginJars = myCompilerPlugin.files.map { "-Xplugin=${it.absolutePath}" }
-        // Pass it to the Kotlin compiler
-        kotlinOptions.freeCompilerArgs += pluginJars
+    dependsOn(myCompilerPlugin)
+    // We use the modern 'compilerOptions' API and a lazy 'provider'
+    compilerOptions {
+        freeCompilerArgs.addAll(
+            provider {
+                myCompilerPlugin.files.map { "-Xplugin=${it.absolutePath}" }
+            }
+        )
     }
 }
