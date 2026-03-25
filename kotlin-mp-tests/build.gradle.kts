@@ -20,7 +20,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("com.rkh.kotlinmp.tests.MainKt")
+    mainClass.set("com.rkh.kotlinmp.tests.StaticScheduleKt")
 }
 
 // 3. The Compiler Hook: Inject the plugin during the compile task
