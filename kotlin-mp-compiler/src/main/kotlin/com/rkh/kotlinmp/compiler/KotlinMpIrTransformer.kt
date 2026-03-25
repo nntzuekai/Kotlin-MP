@@ -58,6 +58,7 @@ class KotlinMpIrTransformer(
             // Index 1: The Schedule (e.g., Schedule.Dynamic) - We will ignore this for the static prototype
             // Index 2: The Lambda Block (e.g., { i -> process(i) })
             val rangeArgument = expression.getValueArgument(0)
+            val scheduleArgument = expression.getValueArgument(1)
             val blockArgument = expression.getValueArgument(2)
 
             // 3. Create the new AST Node (IrCall) pointing to our support function
@@ -67,12 +68,13 @@ class KotlinMpIrTransformer(
                 type = expression.type,
                 symbol = supportFunctionSymbol,
                 typeArgumentsCount = 0,
-                valueArgumentsCount = 2 // range, block
+                valueArgumentsCount = 3 // range, block
             )
 
             // 4. Glue the user's extracted arguments into the new call
             newCall.putValueArgument(0, rangeArgument)
-            newCall.putValueArgument(1, blockArgument)
+            newCall.putValueArgument(1, scheduleArgument)
+            newCall.putValueArgument(2, blockArgument)
 
             // 5. Return the new call.
             // The compiler completely deletes the old 'parallelFor' and inserts this instead!
