@@ -26,14 +26,26 @@ class KotlinMpIrTransformer(
         if (fullFunctionName == "com.rkh.kotlinmp.OmpContext.parallelFor") {
 
             // Look at the first parameter of the function the user called
-            val firstParamType = expression.symbol.owner.valueParameters[0].type.classFqName?.asString()
+            val param0Type = expression.symbol.owner.valueParameters[0].type.classFqName?.asString()
+            val loopType = if (param0Type == "kotlin.ranges.IntRange") "Range" else "Progression"
 
-            // Decide which trampoline to use based on the parameter type!
-            val targetTrampolineName = if (firstParamType == "kotlin.ranges.IntRange") {
-                "executeParallelRangeStatic"
-            } else {
-                "executeParallelProgressionStatic"
+            // Look at Parameter 1 to determine the exact Schedule type
+            val param1Type = expression.symbol.owner.valueParameters.getOrNull(1)?.type?.classFqName?.asString()
+            val trampolineSuffix = when (param1Type) {
+                "com.rkh.kotlinmp.Schedule.Static" -> "Static"
+                "com.rkh.kotlinmp.Schedule.StaticChunked" -> "StaticChunked"
+                "com.rkh.kotlinmp.Schedule.Dynamic" -> "DynamicDefault"
+                "com.rkh.kotlinmp.Schedule.DynamicChunked" -> "DynamicChunked"
+                null -> "StaticBlock" // Overload 1 (No schedule provided)
+
+                // Throw a hard compiler error here if we somehow hit an unknown state
+                else -> {
+                    messageCollector.report(CompilerMessageSeverity.ERROR, "Unknown schedule type: $param1Type")
+                    return super.visitCall(expression)
+                }
             }
+
+            val targetTrampolineName = "executeParallel${loopType}${trampolineSuffix}"
 
             messageCollector.report(
                 CompilerMessageSeverity.WARNING,

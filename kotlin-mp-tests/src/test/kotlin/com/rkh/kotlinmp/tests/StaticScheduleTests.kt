@@ -16,7 +16,7 @@ class StaticScheduleTests {
 
         // This should trigger executeParallelProgressionStatic
         omp {
-            parallelFor(18 downTo 0 step 2, Schedule.Static) { i ->
+            parallelFor(18 downTo 0 step 2, Schedule.Static()) { i ->
                 println("Progression Index $i processed by: ${Thread.currentThread().name}")
                 c[i] = a[i] + b[i]
             }
