@@ -39,6 +39,9 @@ class KotlinMpIrTransformer(
 
         val trampolineSuffix: String
 
+
+        var optimizeDynamicOne = false
+
         if (expression.valueArgumentsCount == 2) {
             trampolineSuffix = "Static" // Default Overload
         }
@@ -59,12 +62,14 @@ class KotlinMpIrTransformer(
             // 2. ENFORCE INLINE CHUNK SIZE CONSTANT (Reject `Schedule.Static(n)`)
             // If the schedule is an IrCall (meaning they used the invoke operator)
             // AND it has arguments (meaning they typed a chunk size instead of empty parentheses)
+
+            val actualValue: Int?
             if (scheduleArg is IrCall && scheduleArg.valueArgumentsCount > 0) {
 
                 // Grab what they passed as the chunk size
                 val chunkSizeArg = scheduleArg.getValueArgument(0)!!
 
-                val actualValue = extractConstInt(chunkSizeArg)
+                actualValue = extractConstInt(chunkSizeArg)
 
                 // If it returns null, it means it was a normal `val`, a function call, or something else illegal.
                 if (actualValue == null) {
@@ -85,6 +90,9 @@ class KotlinMpIrTransformer(
                     return super.visitCall(expression)
                 }
             }
+            else{
+                actualValue = null
+            }
 
             // 4. MAP TO TRAMPOLINE
             val param1Type = expression.symbol.owner.valueParameters[1].type.classFqName?.asString()
@@ -92,7 +100,19 @@ class KotlinMpIrTransformer(
                 "com.rkh.kotlinmp.Schedule.Static" -> "Static"
                 "com.rkh.kotlinmp.Schedule.StaticChunked" -> "StaticChunked"
                 "com.rkh.kotlinmp.Schedule.Dynamic" -> "DynamicDefault"
-                "com.rkh.kotlinmp.Schedule.DynamicChunked" -> "DynamicChunked"
+                "com.rkh.kotlinmp.Schedule.DynamicChunked" -> {
+                    // THE INTERCEPT: If it's DynamicChunked AND the size is exactly 1
+                    if (actualValue == 1) {
+                        optimizeDynamicOne = true
+                        messageCollector.report(
+                            CompilerMessageSeverity.INFO,
+                            "Optimizing Schedule.Dynamic(1) -> Schedule.Dynamic()"
+                        )
+                        "DynamicDefault" // Reroute to the faster trampoline!
+                    } else {
+                        "DynamicChunked" // Keep it normal
+                    }
+                }
                 else -> {
                     messageCollector.report(CompilerMessageSeverity.ERROR, "Unknown schedule type: $param1Type")
                     return super.visitCall(expression)
@@ -160,7 +180,23 @@ class KotlinMpIrTransformer(
         }
         else {
             newCall.putValueArgument(0, expression.getValueArgument(0))
-            newCall.putValueArgument(1, expression.getValueArgument(1))
+
+            if (optimizeDynamicOne) {
+                val dynamicClassId = ClassId.topLevel(FqName("com.rkh.kotlinmp.Schedule.Dynamic"))
+                val dynamicSymbol = pluginContext.referenceClass(dynamicClassId)
+                    ?: error("Compiler Panic: Cannot find com.rkh.kotlinmp.Schedule.Dynamic")
+                val synthesizedDynamicSchedule = IrGetObjectValueImpl(
+                    startOffset = expression.startOffset,
+                    endOffset = expression.endOffset,
+                    type = dynamicSymbol.defaultType,
+                    symbol = dynamicSymbol
+                )
+
+                newCall.putValueArgument(1, synthesizedDynamicSchedule) // Inject the optimized singleton
+            } else {
+                newCall.putValueArgument(1, expression.getValueArgument(1))
+            }
+
             newCall.putValueArgument(2, expression.getValueArgument(2))
         }
         // 5. Return the new call.

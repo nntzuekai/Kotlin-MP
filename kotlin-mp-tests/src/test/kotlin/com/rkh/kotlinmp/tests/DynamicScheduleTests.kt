@@ -32,6 +32,25 @@ class DynamicScheduleTests {
     }
 
     @Test
+    fun testRangeDynamicChunkedWithConst1() {
+        println("--- Running Dynamic Chunked (Range, Chunk = 1) ---")
+        val size = 20
+        val c = IntArray(size)
+
+        // Passing the const val to test the IR extraction logic
+        omp {
+            parallelFor(0 until size, Schedule.Dynamic(1)) { i ->
+                c[i] = i * 2
+            }
+        }
+
+        for (i in 0 until size) {
+            assertEquals(i * 2, c[i], "Chunked computation failed at $i")
+        }
+        println("Range Dynamic Chunked Test Passed!\n")
+    }
+
+    @Test
     fun testRangeDynamicChunkedWithConst() {
         println("--- Running Dynamic Chunked (Range, Chunk = $DYNAMIC_CHUNK_SIZE) ---")
         val size = 20
