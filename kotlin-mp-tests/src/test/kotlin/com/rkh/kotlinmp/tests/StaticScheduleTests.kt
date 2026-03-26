@@ -9,7 +9,7 @@ const val CHUNK_SIZE=2
 
 class StaticScheduleTests {
     @Test
-    fun testProgressionSlowPath() {
+    fun testProgression() {
         println("--- Running Slow Path (IntProgression) Test ---")
         val size = 20
         val a = IntArray(size) { it }
@@ -37,7 +37,7 @@ class StaticScheduleTests {
     }
 
     @Test
-    fun testStandardRangeFastPath() {
+    fun testStandardRange() {
         println("--- Running Fast Path (IntRange) Test ---")
         val size = 20
         val a = IntArray(size) { it }
