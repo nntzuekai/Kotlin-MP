@@ -5,7 +5,24 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
+import java.util.concurrent.Phaser
 
+@DslMarker
+annotation class OpenMpDsl
+
+@OpenMpDsl
+class ParallelScope(@PublishedApi internal val phaser: Phaser) {
+
+    /**
+     * OpenMP Explicit Barrier.
+     * Only available inside `parallel { ... }`.
+     */
+    inline fun barrier() {
+        phaser.arriveAndAwaitAdvance()
+    }
+}
+
+@OpenMpDsl
 class OmpContext {
 
     /**
@@ -73,15 +90,15 @@ class OmpContext {
     /**
      * The Mutual Exclusion construct.
      */
-    // 1. The Global Lock (For unnamed `#pragma omp critical`)
-    @PublishedApi
-    internal val defaultCriticalLock = ReentrantLock()
+    companion object {
+        // 1. The Global Lock (For unnamed `#pragma omp critical`)
+        @PublishedApi
+        internal val defaultCriticalLock = ReentrantLock()
 
-    // 2. The Lock Registry (For named `#pragma omp critical(name)`)
-    @PublishedApi
-    internal val namedCriticalLocks = ConcurrentHashMap<String, ReentrantLock>()
-
-    // --- THE DSL FUNCTIONS ---
+        // 2. The Lock Registry (For named `#pragma omp critical(name)`)
+        @PublishedApi
+        internal val namedCriticalLocks = ConcurrentHashMap<String, ReentrantLock>()
+    }
 
     /**
      * OpenMP Unnamed Critical Section.
@@ -106,12 +123,26 @@ class OmpContext {
     }
 
     /**
-     * The Synchronization construct.
+     * OpenMP General Parallel Region.
+     * Spawns threads and changes the receiver to `ParallelScope` so `barrier()` becomes legal.
      */
-    fun barrier() {
-        // SEQUENTIAL FALLBACK:
-        // A barrier with 1 thread is a no-op.
-        // Your compiler plugin will replace this with `CyclicBarrier.await()`.
+    inline fun parallel(numThreads: Int = ForkJoinPool.commonPool().parallelism.coerceAtLeast(1), crossinline block: ParallelScope.() -> Unit) {
+        if (numThreads <= 0) return
+        val pool = ForkJoinPool.commonPool()
+        val phaser = Phaser(numThreads)
+        val scope = ParallelScope(phaser)
+
+        val tasks = (0 until numThreads).map {
+            Runnable {
+                try {
+                    scope.block()
+                } finally {
+                    phaser.arriveAndDeregister()
+                }
+            }
+        }
+        val futures = tasks.map { pool.submit(it) }
+        futures.forEach { it.get() }
     }
 }
 
