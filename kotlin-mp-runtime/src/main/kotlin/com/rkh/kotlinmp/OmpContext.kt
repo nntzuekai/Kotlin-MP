@@ -126,13 +126,22 @@ class OmpContext {
      * OpenMP General Parallel Region.
      * Spawns threads and changes the receiver to `ParallelScope` so `barrier()` becomes legal.
      */
-    inline fun parallel(numThreads: Int = ForkJoinPool.commonPool().parallelism.coerceAtLeast(1), crossinline block: ParallelScope.() -> Unit) {
-        if (numThreads <= 0) return
+    inline fun parallel(numThreads: Int = 0, crossinline block: ParallelScope.() -> Unit) {
+        require(numThreads >= 0) {
+            "OpenMP Error: num_threads must be a non-negative integer. You provided: $numThreads"
+        }
+
+        val actualThreads = if (numThreads == 0) {
+            ForkJoinPool.commonPool().parallelism.coerceAtLeast(1)
+        } else {
+            numThreads
+        }
+
         val pool = ForkJoinPool.commonPool()
-        val phaser = Phaser(numThreads)
+        val phaser = Phaser(actualThreads)
         val scope = ParallelScope(phaser)
 
-        val tasks = (0 until numThreads).map {
+        val tasks = (0 until actualThreads).map {
             Runnable {
                 try {
                     scope.block()
