@@ -1,4 +1,4 @@
-# Matrix Multiplication
+# Integer Matrix Multiplication
 
 ## With inline trampoline
 
@@ -36,3 +36,24 @@
 | MatrixMultiplicationBenchmark.benchmarkKotlinMpDefault | avgt |   5 |  843.495 |  38.636 | ms/op |
 | MatrixMultiplicationBenchmark.benchmarkManualForkJoin  | avgt |   5 |  717.650 |  56.298 | ms/op |
 | MatrixMultiplicationBenchmark.benchmarkSequential      | avgt |   5 | 2466.912 | 128.607 | ms/op |
+
+# Double Matrix Multiplication
+
+## With inline trampoline
+
+### n=512
+| Benchmark                                                    | Mode | Cnt |   Score |  Error | Units |
+| ------------------------------------------------------------ | ---: | --: | ------: | -----: | ----- |
+| DoubleMatrixMultiplicationBenchmark.benchmarkCoroutines      | avgt |   5 |  99.674 | 57.784 | ms/op |
+| DoubleMatrixMultiplicationBenchmark.benchmarkKotlinMpDefault | avgt |   5 |  78.309 |  7.862 | ms/op |
+| DoubleMatrixMultiplicationBenchmark.benchmarkManualForkJoin  | avgt |   5 |  78.677 | 22.241 | ms/op |
+| DoubleMatrixMultiplicationBenchmark.benchmarkSequential      | avgt |   5 | 286.532 | 24.432 | ms/op |
+
+
+### n=1024
+| Benchmark                                                    | Mode | Cnt |    Score |   Error | Units |
+| ------------------------------------------------------------ | ---: | --: | -------: | ------: | ----- |
+| DoubleMatrixMultiplicationBenchmark.benchmarkCoroutines      | avgt |   5 |  803.325 |  57.472 | ms/op |
+| DoubleMatrixMultiplicationBenchmark.benchmarkKotlinMpDefault | avgt |   5 |  967.716 | 155.688 | ms/op |
+| DoubleMatrixMultiplicationBenchmark.benchmarkManualForkJoin  | avgt |   5 | 1082.468 | 794.607 | ms/op |
+| DoubleMatrixMultiplicationBenchmark.benchmarkSequential      | avgt |   5 | 5879.757 | 345.261 | ms/op |

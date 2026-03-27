@@ -1,4 +1,4 @@
-package com.rkh.kotlinmp.benchmarks
+package com.rkh.kotlinmp.benchmark
 
 import com.rkh.kotlinmp.*
 import kotlinx.coroutines.Dispatchers
@@ -7,7 +7,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import org.openjdk.jmh.annotations.*
 import java.util.concurrent.ForkJoinPool
-import java.util.concurrent.ForkJoinTask
 import java.util.concurrent.TimeUnit
 
 @State(Scope.Benchmark)
@@ -16,22 +15,21 @@ import java.util.concurrent.TimeUnit
 @Warmup(iterations = 3, time = 1, timeUnit = TimeUnit.SECONDS)
 @Measurement(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
 @Fork(1)
-open class MatrixMultiplicationBenchmark {
-
+open class DoubleMatrixMultiplicationBenchmark {
     @Param("512", "1024")
     var size: Int = 0
 
-    lateinit var matrixA: IntArray
-    lateinit var matrixB: IntArray
-    lateinit var matrixC: IntArray
+    lateinit var matrixA: DoubleArray
+    lateinit var matrixB: DoubleArray
+    lateinit var matrixC: DoubleArray
 
     @Setup(Level.Trial)
     fun setup() {
         val totalElements = size * size
         // Using modulo to prevent integer overflow during the O(N^3) multiplication
-        matrixA = IntArray(totalElements) { it % 100 }
-        matrixB = IntArray(totalElements) { (it * 2) % 100 }
-        matrixC = IntArray(totalElements)
+        matrixA = DoubleArray(totalElements) { it.toDouble() % 100 }
+        matrixB = DoubleArray(totalElements) { (it.toDouble() * 2) % 100 }
+        matrixC = DoubleArray(totalElements)
     }
 
     // 1. THE BASELINE: Standard Sequential Loop
@@ -39,7 +37,7 @@ open class MatrixMultiplicationBenchmark {
     fun benchmarkSequential() {
         for (i in 0 until size) {
             for (j in 0 until size) {
-                var sum = 0
+                var sum = 0.0
                 for (k in 0 until size) {
                     sum += matrixA[i * size + k] * matrixB[k * size + j]
                 }
@@ -54,7 +52,7 @@ open class MatrixMultiplicationBenchmark {
         (0 until size).map { i ->
             async {
                 for (j in 0 until size) {
-                    var sum = 0
+                    var sum = 0.0
                     for (k in 0 until size) {
                         sum += matrixA[i * size + k] * matrixB[k * size + j]
                     }
@@ -80,7 +78,7 @@ open class MatrixMultiplicationBenchmark {
             Runnable {
                 for (i in chunkStart..chunkEnd) {
                     for (j in 0 until size) {
-                        var sum = 0
+                        var sum = 0.0
                         for (k in 0 until size) {
                             sum += matrixA[i * size + k] * matrixB[k * size + j]
                         }
@@ -99,7 +97,7 @@ open class MatrixMultiplicationBenchmark {
         omp {
             parallelFor(0 until size) { i ->
                 for (j in 0 until size) {
-                    var sum = 0
+                    var sum = 0.0
                     for (k in 0 until size) {
                         sum += matrixA[i * size + k] * matrixB[k * size + j]
                     }
