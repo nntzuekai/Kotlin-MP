@@ -159,7 +159,7 @@ class OmpContext {
  * This is the HIDDEN support function. 
  * The user never types this. The compiler plugin rewrites their code to call this instead!
  */
-fun executeParallelRangeStatic(range: IntRange, schedule: Schedule.Static, block: (Int) -> Unit) {
+inline fun executeParallelRangeStatic(range: IntRange, schedule: Schedule.Static, crossinline block: (Int) -> Unit) {
     if (range.isEmpty()) return
 
     val pool = ForkJoinPool.commonPool()
@@ -192,7 +192,7 @@ fun executeParallelRangeStatic(range: IntRange, schedule: Schedule.Static, block
     futures.forEach { it.get() }
 }
 
-fun executeParallelRangeStaticChunked(range: IntRange, schedule: Schedule.StaticChunked, block: (Int) -> Unit) {
+inline fun executeParallelRangeStaticChunked(range: IntRange, schedule: Schedule.StaticChunked, crossinline block: (Int) -> Unit) {
     if (range.isEmpty()) return
 
     val pool = ForkJoinPool.commonPool()
@@ -223,7 +223,7 @@ fun executeParallelRangeStaticChunked(range: IntRange, schedule: Schedule.Static
     futures.forEach { it.get() }
 }
 
-fun executeParallelProgressionStatic(progression: IntProgression, schedule: Schedule.Static, block: (Int) -> Unit) {
+inline fun executeParallelProgressionStatic(progression: IntProgression, schedule: Schedule.Static, crossinline block: (Int) -> Unit) {
     if (progression.isEmpty()) return
 
     val pool = ForkJoinPool.commonPool()
@@ -263,7 +263,7 @@ fun executeParallelProgressionStatic(progression: IntProgression, schedule: Sche
     futures.forEach { it.get() }
 }
 
-fun executeParallelProgressionStaticChunked(progression: IntProgression, schedule: Schedule.StaticChunked, block: (Int) -> Unit) {
+inline fun executeParallelProgressionStaticChunked(progression: IntProgression, schedule: Schedule.StaticChunked, crossinline block: (Int) -> Unit) {
     if (progression.isEmpty()) return
 
     val pool = ForkJoinPool.commonPool()
@@ -303,7 +303,7 @@ fun executeParallelProgressionStaticChunked(progression: IntProgression, schedul
     futures.forEach { it.get() }
 }
 
-fun executeParallelRangeDynamicDefault(range: IntRange, schedule: Schedule.Dynamic, block: (Int) -> Unit) {
+inline fun executeParallelRangeDynamicDefault(range: IntRange, schedule: Schedule.Dynamic, crossinline block: (Int) -> Unit) {
     if (range.isEmpty()) return
     val pool = ForkJoinPool.commonPool()
     val numThreads = pool.parallelism.coerceAtLeast(1)
@@ -331,7 +331,7 @@ fun executeParallelRangeDynamicDefault(range: IntRange, schedule: Schedule.Dynam
     futures.forEach { it.get() }
 }
 
-fun executeParallelRangeDynamicChunked(range: IntRange, schedule: Schedule.DynamicChunked, block: (Int) -> Unit) {
+inline fun executeParallelRangeDynamicChunked(range: IntRange, schedule: Schedule.DynamicChunked, crossinline block: (Int) -> Unit) {
     if (range.isEmpty()) return
     val pool = ForkJoinPool.commonPool()
     val numThreads = pool.parallelism.coerceAtLeast(1)
@@ -364,7 +364,7 @@ fun executeParallelRangeDynamicChunked(range: IntRange, schedule: Schedule.Dynam
     futures.forEach { it.get() }
 }
 
-fun executeParallelProgressionDynamicDefault(progression: IntProgression, schedule: Schedule.Dynamic, block: (Int) -> Unit) {
+inline fun executeParallelProgressionDynamicDefault(progression: IntProgression, schedule: Schedule.Dynamic, crossinline block: (Int) -> Unit) {
     if (progression.isEmpty()) return
     val pool = ForkJoinPool.commonPool()
     val numThreads = pool.parallelism.coerceAtLeast(1)
@@ -399,7 +399,7 @@ fun executeParallelProgressionDynamicDefault(progression: IntProgression, schedu
     futures.forEach { it.get() }
 }
 
-fun executeParallelProgressionDynamicChunked(progression: IntProgression, schedule: Schedule.DynamicChunked, block: (Int) -> Unit) {
+inline fun executeParallelProgressionDynamicChunked(progression: IntProgression, schedule: Schedule.DynamicChunked, crossinline block: (Int) -> Unit) {
     if (progression.isEmpty()) return
     val pool = ForkJoinPool.commonPool()
     val numThreads = pool.parallelism.coerceAtLeast(1)
