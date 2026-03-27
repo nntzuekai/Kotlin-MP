@@ -4,7 +4,7 @@ import com.rkh.kotlinmp.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
-class criticalTests {
+class CriticalTests {
     @Test
     fun testCriticalMutualExclusion() {
         println("--- Running OpenMP Critical Construct Test ---")
