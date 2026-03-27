@@ -2,6 +2,9 @@ package com.rkh.kotlinmp
 
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 class OmpContext {
 
@@ -70,11 +73,36 @@ class OmpContext {
     /**
      * The Mutual Exclusion construct.
      */
-    inline fun critical(block: () -> Unit) {
-        // SEQUENTIAL FALLBACK:
-        // Since sequential code only has one thread, no locking is needed.
-        // Your compiler plugin will wrap this in a JVM Monitor (synchronized).
-        block()
+    // 1. The Global Lock (For unnamed `#pragma omp critical`)
+    @PublishedApi
+    internal val defaultCriticalLock = ReentrantLock()
+
+    // 2. The Lock Registry (For named `#pragma omp critical(name)`)
+    @PublishedApi
+    internal val namedCriticalLocks = ConcurrentHashMap<String, ReentrantLock>()
+
+    // --- THE DSL FUNCTIONS ---
+
+    /**
+     * OpenMP Unnamed Critical Section.
+     * Ensures mutual exclusion across ALL unnamed critical sections globally.
+     */
+    inline fun critical(crossinline block: () -> Unit) {
+        defaultCriticalLock.withLock {
+            block()
+        }
+    }
+
+    /**
+     * OpenMP Named Critical Section.
+     * Ensures mutual exclusion only among critical sections sharing this exact name.
+     */
+    inline fun critical(name: String, crossinline block: () -> Unit) {
+        // getOrPut is thread-safe thanks to ConcurrentHashMap
+        val lock = namedCriticalLocks.getOrPut(name) { ReentrantLock() }
+        lock.withLock {
+            block()
+        }
     }
 
     /**
