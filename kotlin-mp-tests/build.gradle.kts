@@ -37,6 +37,9 @@ jmh {
     iterations.set(5)
     fork.set(1) // Run in a single forked JVM to save time during testing
     threads.set(1) // JMH threads, NOT your ForkJoinPool threads! Keep this at 1.
+
+    includes.empty()
+    includes.add(".*MatrixMultiplicationBenchmark.*")
 }
 
 
