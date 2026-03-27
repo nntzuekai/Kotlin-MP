@@ -8,7 +8,7 @@ import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
-class ParallelBarrierTest {
+class ParallelBarrierTests {
 
     @Test
     fun testBarrierInParallel() {
