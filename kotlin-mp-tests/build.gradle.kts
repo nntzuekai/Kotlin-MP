@@ -39,7 +39,8 @@ jmh {
     threads.set(1) // JMH threads, NOT your ForkJoinPool threads! Keep this at 1.
 
     includes.empty()
-    includes.add(".*MatrixMultiplicationBenchmark.*")
+//    includes.add(".*MatrixMultiplicationBenchmark.*")
+    includes.add(".FloatMatrixMultiplicationBenchmark.*")
 }
 
 
