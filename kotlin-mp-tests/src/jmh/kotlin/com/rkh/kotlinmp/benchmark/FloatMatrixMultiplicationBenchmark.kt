@@ -16,7 +16,25 @@ import java.util.concurrent.TimeUnit
 @Measurement(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
 @Fork(1)
 open class FloatMatrixMultiplicationBenchmark {
-    @Param("20", "30", "50", "100", "150", "200", "500", "1000")
+    @Param(
+        "20",
+        "30",
+        "31",
+        "32",
+        "50",
+        "96",
+        "97",
+        "100",
+        "127",
+        "128",
+        "129",
+        "150",
+        "200",
+        "500",
+        "600",
+        "700",
+        "1000"
+    )
     var size: Int = 0
 
     lateinit var matrixA: FloatArray
