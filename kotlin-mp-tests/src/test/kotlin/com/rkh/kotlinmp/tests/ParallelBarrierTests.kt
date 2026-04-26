@@ -3,12 +3,43 @@ package com.rkh.kotlinmp.tests
 import com.rkh.kotlinmp.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 class ParallelBarrierTests {
+
+    @Test
+    fun testParallelWithoutBarrier() {
+        println("--- Running OpenMP Parallel Test (No Barrier) ---")
+
+        val threadCount = 4
+        val executions = AtomicInteger(0)
+        val threadNames = mutableSetOf<String>()
+
+        omp {
+            parallel(numThreads = threadCount) {
+                executions.incrementAndGet()
+                synchronized(threadNames) {
+                    threadNames.add(Thread.currentThread().name)
+                }
+            }
+        }
+
+        assertEquals(
+            threadCount,
+            executions.get(),
+            "Parallel region without barrier should still execute once per worker."
+        )
+        assertTrue(
+            threadNames.isNotEmpty(),
+            "Parallel region without barrier should execute on at least one thread."
+        )
+
+        println("Parallel Without Barrier Test Passed!\n")
+    }
 
     @Test
     fun testBarrierInParallel() {

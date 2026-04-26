@@ -11,14 +11,15 @@ import java.util.concurrent.Phaser
 annotation class OpenMpDsl
 
 @OpenMpDsl
-class ParallelScope(@PublishedApi internal val phaser: Phaser) {
+class ParallelScope(@PublishedApi internal val phaser: Phaser?) {
 
     /**
      * OpenMP Explicit Barrier.
      * Only available inside `parallel { ... }`.
      */
     inline fun barrier() {
-        phaser.arriveAndAwaitAdvance()
+        phaser?.arriveAndAwaitAdvance()
+            ?: error("OpenMP Error: barrier() is only valid in a barrier-enabled parallel region.")
     }
 }
 
@@ -127,32 +128,62 @@ class OmpContext {
      * Spawns threads and changes the receiver to `ParallelScope` so `barrier()` becomes legal.
      */
     inline fun parallel(numThreads: Int = 0, crossinline block: ParallelScope.() -> Unit) {
-        require(numThreads >= 0) {
-            "OpenMP Error: num_threads must be a non-negative integer. You provided: $numThreads"
+        executeParallelRegionWithBarrier(numThreads, block)
+    }
+}
+
+@PublishedApi
+internal inline fun resolveParallelThreadCount(numThreads: Int): Int {
+    require(numThreads >= 0) {
+        "OpenMP Error: num_threads must be a non-negative integer. You provided: $numThreads"
+    }
+
+    return if (numThreads == 0) {
+        ForkJoinPool.commonPool().parallelism.coerceAtLeast(1)
+    } else {
+        numThreads
+    }
+}
+
+/**
+ * This is the HIDDEN support function for a barrier-free parallel region.
+ * The compiler plugin rewrites `parallel { ... }` to call this when the lambda has no barrier.
+ */
+inline fun executeParallelRegionWithoutBarrier(numThreads: Int = 0, crossinline block: ParallelScope.() -> Unit) {
+    val actualThreads = resolveParallelThreadCount(numThreads)
+    val pool = ForkJoinPool.commonPool()
+    val scope = ParallelScope(null)
+
+    val tasks = (0 until actualThreads).map {
+        Runnable {
+            scope.block()
         }
+    }
+    val futures = tasks.map { pool.submit(it) }
+    futures.forEach { it.get() }
+}
 
-        val actualThreads = if (numThreads == 0) {
-            ForkJoinPool.commonPool().parallelism.coerceAtLeast(1)
-        } else {
-            numThreads
-        }
+/**
+ * This is the HIDDEN support function for a barrier-enabled parallel region.
+ * The compiler plugin rewrites `parallel { ... }` to call this when the lambda uses barrier().
+ */
+inline fun executeParallelRegionWithBarrier(numThreads: Int = 0, crossinline block: ParallelScope.() -> Unit) {
+    val actualThreads = resolveParallelThreadCount(numThreads)
+    val pool = ForkJoinPool.commonPool()
+    val phaser = Phaser(actualThreads)
+    val scope = ParallelScope(phaser)
 
-        val pool = ForkJoinPool.commonPool()
-        val phaser = Phaser(actualThreads)
-        val scope = ParallelScope(phaser)
-
-        val tasks = (0 until actualThreads).map {
-            Runnable {
-                try {
-                    scope.block()
-                } finally {
-                    phaser.arriveAndDeregister()
-                }
+    val tasks = (0 until actualThreads).map {
+        Runnable {
+            try {
+                scope.block()
+            } finally {
+                phaser.arriveAndDeregister()
             }
         }
-        val futures = tasks.map { pool.submit(it) }
-        futures.forEach { it.get() }
     }
+    val futures = tasks.map { pool.submit(it) }
+    futures.forEach { it.get() }
 }
 
 /**

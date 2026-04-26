@@ -4,12 +4,15 @@ import org.jetbrains.kotlin.backend.common.IrElementTransformerVoidWithContext
 import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
+import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.expressions.IrExpression
+import org.jetbrains.kotlin.ir.expressions.IrFunctionExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetField
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.impl.IrCallImpl
+import org.jetbrains.kotlin.ir.expressions.impl.IrConstImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrGetObjectValueImpl
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.defaultType
@@ -18,6 +21,8 @@ import org.jetbrains.kotlin.name.CallableId
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.ir.util.kotlinFqName
 import org.jetbrains.kotlin.name.ClassId
+import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
+import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 
 class KotlinMpIrTransformer(
     private val pluginContext: IrPluginContext,
@@ -25,14 +30,22 @@ class KotlinMpIrTransformer(
 ) : IrElementTransformerVoidWithContext() {
 
     override fun visitCall(expression: IrCall): IrExpression {
-        // Extract the full path: com.rkh.kotlinmp.OmpContext.parallelFor
-        val fullFunctionName = expression.symbol.owner.kotlinFqName.asString()
-
-        // Strictly check the fully qualified name
-        if (fullFunctionName != "com.rkh.kotlinmp.OmpContext.parallelFor") {
-            return super.visitCall(expression)
+        val transformedExpression = super.visitCall(expression)
+        if (transformedExpression !is IrCall) {
+            return transformedExpression
         }
 
+        // Extract the full path: com.rkh.kotlinmp.OmpContext.parallelFor
+        val fullFunctionName = transformedExpression.symbol.owner.kotlinFqName.asString()
+
+        return when (fullFunctionName) {
+            "com.rkh.kotlinmp.OmpContext.parallelFor" -> lowerParallelFor(transformedExpression)
+            "com.rkh.kotlinmp.OmpContext.parallel" -> lowerParallel(transformedExpression)
+            else -> transformedExpression
+        }
+    }
+
+    private fun lowerParallelFor(expression: IrCall): IrExpression {
         // Look at the first parameter of the function the user called
         val param0Type = expression.symbol.owner.valueParameters[0].type.classFqName?.asString()
         val loopType = if (param0Type == "kotlin.ranges.IntRange") "Range" else "Progression"
@@ -56,7 +69,7 @@ class KotlinMpIrTransformer(
                     "OpenMP Error: Schedule must be defined inline. " +
                             "Use parallelFor(..., Schedule.Static(LITERAL)), do not pass a variable."
                 )
-                return super.visitCall(expression)
+                return expression
             }
 
             // 2. ENFORCE INLINE CHUNK SIZE CONSTANT (Reject `Schedule.Static(n)`)
@@ -78,7 +91,7 @@ class KotlinMpIrTransformer(
                         "OpenMP Error: chunkSize must be an inline integer or a 'const val'. " +
                                 "Standard runtime variables are not allowed."
                     )
-                    return super.visitCall(expression)
+                    return expression
                 }
 
                 // 3. ENFORCE CHUNK SIZE >= 1
@@ -87,7 +100,7 @@ class KotlinMpIrTransformer(
                         CompilerMessageSeverity.ERROR,
                         "OpenMP Error: chunkSize must be >= 1. You provided: $actualValue"
                     )
-                    return super.visitCall(expression)
+                    return expression
                 }
             }
             else{
@@ -115,7 +128,7 @@ class KotlinMpIrTransformer(
                 }
                 else -> {
                     messageCollector.report(CompilerMessageSeverity.ERROR, "Unknown schedule type: $param1Type")
-                    return super.visitCall(expression)
+                    return expression
                 }
             }
         }
@@ -137,7 +150,7 @@ class KotlinMpIrTransformer(
 
         if (supportFunctionSymbol == null) {
             messageCollector.report(CompilerMessageSeverity.ERROR, "Could not find $targetTrampolineName!")
-            return super.visitCall(expression)
+            return expression
         }
 
         // 2. Extract the arguments the user passed to parallelFor
@@ -202,7 +215,83 @@ class KotlinMpIrTransformer(
         // 5. Return the new call.
         // The compiler completely deletes the old 'parallelFor' and inserts this instead!
         return newCall
+    }
 
+    private fun lowerParallel(expression: IrCall): IrExpression {
+        val blockArgument = expression.getValueArgument(expression.valueArgumentsCount - 1)
+        val usesBarrier = containsBarrierCall(blockArgument)
+        val targetTrampolineName = if (usesBarrier) {
+            "executeParallelRegionWithBarrier"
+        } else {
+            "executeParallelRegionWithoutBarrier"
+        }
+
+        messageCollector.report(
+            CompilerMessageSeverity.WARNING,
+            "-> Routing parallel region to $targetTrampolineName"
+        )
+
+        val callableId = CallableId(
+            packageName = FqName("com.rkh.kotlinmp"),
+            callableName = Name.identifier(targetTrampolineName)
+        )
+
+        val supportFunctionSymbol = pluginContext.referenceFunctions(callableId).singleOrNull()
+        if (supportFunctionSymbol == null) {
+            messageCollector.report(CompilerMessageSeverity.ERROR, "Could not find $targetTrampolineName!")
+            return expression
+        }
+
+        val newCall = IrCallImpl(
+            startOffset = expression.startOffset,
+            endOffset = expression.endOffset,
+            type = expression.type,
+            symbol = supportFunctionSymbol,
+            typeArgumentsCount = expression.typeArgumentsCount,
+            valueArgumentsCount = 2,
+            origin = expression.origin
+        )
+
+        val numThreadsArgument = if (expression.valueArgumentsCount == 1) {
+            IrConstImpl.int(
+                startOffset = expression.startOffset,
+                endOffset = expression.endOffset,
+                type = pluginContext.irBuiltIns.intType,
+                value = 0
+            )
+        } else {
+            expression.getValueArgument(0)
+        }
+
+        newCall.putValueArgument(0, numThreadsArgument)
+        newCall.putValueArgument(1, blockArgument)
+        return newCall
+    }
+
+    private fun containsBarrierCall(expression: IrExpression?): Boolean {
+        if (expression == null) return false
+
+        var foundBarrier = false
+        expression.acceptChildrenVoid(object : IrElementVisitorVoid {
+            override fun visitElement(element: IrElement) {
+                if (!foundBarrier) {
+                    element.acceptChildrenVoid(this)
+                }
+            }
+
+            override fun visitCall(expression: IrCall) {
+                if (expression.symbol.owner.kotlinFqName.asString() == "com.rkh.kotlinmp.ParallelScope.barrier") {
+                    foundBarrier = true
+                    return
+                }
+                visitElement(expression)
+            }
+
+            override fun visitFunctionExpression(expression: IrFunctionExpression) {
+                visitElement(expression)
+            }
+        })
+        return foundBarrier
     }
 
     private fun extractConstInt(expression: IrExpression?): Int? {
