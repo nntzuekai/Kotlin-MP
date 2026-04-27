@@ -252,19 +252,14 @@ class KotlinMpIrTransformer(
             origin = expression.origin
         )
 
-        val numThreadsArgument = if (expression.valueArgumentsCount == 1) {
-            IrConstImpl.int(
-                startOffset = expression.startOffset,
-                endOffset = expression.endOffset,
-                type = pluginContext.irBuiltIns.intType,
-                value = 0
-            )
-        } else {
-            expression.getValueArgument(0)
-        }
 
-        newCall.putValueArgument(0, numThreadsArgument)
-        newCall.putValueArgument(1, blockArgument)
+        if(expression.valueArgumentsCount == 1){
+            newCall.putValueArgument(0, blockArgument)
+        }
+        else{
+            newCall.putValueArgument(0, expression.getValueArgument(0))
+            newCall.putValueArgument(1, blockArgument)
+        }
         return newCall
     }
 
