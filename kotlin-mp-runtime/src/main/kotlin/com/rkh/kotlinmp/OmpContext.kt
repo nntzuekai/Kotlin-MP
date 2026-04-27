@@ -147,16 +147,16 @@ internal inline fun resolveParallelThreadCount(numThreads: Int): Int {
 
 /**
  * This is the HIDDEN support function for a barrier-free parallel region.
- * The compiler plugin rewrites `parallel { ... }` to call this when the lambda has no barrier.
+ * The compiler plugin rewrites `parallel { ... }` to call this when the lambda has no barrier
+ * and does not use the `ParallelScope` receiver.
  */
-inline fun executeParallelRegionWithoutBarrier(numThreads: Int = 0, crossinline block: ParallelScope.() -> Unit) {
+inline fun executeParallelRegionWithoutBarrier(numThreads: Int = 0, crossinline block: () -> Unit) {
     val actualThreads = resolveParallelThreadCount(numThreads)
     val pool = ForkJoinPool.commonPool()
-    val scope = ParallelScope(null)
 
     val tasks = (0 until actualThreads).map {
         Runnable {
-            scope.block()
+            block()
         }
     }
     val futures = tasks.map { pool.submit(it) }

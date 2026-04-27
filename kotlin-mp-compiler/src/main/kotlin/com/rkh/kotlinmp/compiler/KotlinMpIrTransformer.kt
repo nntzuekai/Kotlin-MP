@@ -29,6 +29,11 @@ class KotlinMpIrTransformer(
     private val messageCollector: MessageCollector
 ) : IrElementTransformerVoidWithContext() {
 
+    private data class ParallelBlockAnalysis(
+        val usesBarrier: Boolean,
+        val usesReceiver: Boolean
+    )
+
     override fun visitCall(expression: IrCall): IrExpression {
         val transformedExpression = super.visitCall(expression)
         if (transformedExpression !is IrCall) {
@@ -219,8 +224,17 @@ class KotlinMpIrTransformer(
 
     private fun lowerParallel(expression: IrCall): IrExpression {
         val blockArgument = expression.getValueArgument(expression.valueArgumentsCount - 1)
-        val usesBarrier = containsBarrierCall(blockArgument)
-        val targetTrampolineName = if (usesBarrier) {
+        val analysis = analyzeParallelBlock(blockArgument)
+        if (!analysis.usesBarrier && analysis.usesReceiver) {
+            messageCollector.report(
+                CompilerMessageSeverity.ERROR,
+                "OpenMP Error: barrier-free parallel blocks cannot reference the ParallelScope receiver. " +
+                        "Only barrier-enabled regions may use `barrier()` or `this`."
+            )
+            return expression
+        }
+
+        val targetTrampolineName = if (analysis.usesBarrier) {
             "executeParallelRegionWithBarrier"
         } else {
             "executeParallelRegionWithoutBarrier"
@@ -253,23 +267,31 @@ class KotlinMpIrTransformer(
         )
 
 
-        if(expression.valueArgumentsCount == 1){
-            newCall.putValueArgument(0, blockArgument)
+        if (expression.valueArgumentsCount == 1) {
+            newCall.putValueArgument(
+                0,
+                if (analysis.usesBarrier) blockArgument else adaptBarrierFreeParallelBlock(blockArgument)
+            )
         }
         else{
             newCall.putValueArgument(0, expression.getValueArgument(0))
-            newCall.putValueArgument(1, blockArgument)
+            newCall.putValueArgument(
+                1,
+                if (analysis.usesBarrier) blockArgument else adaptBarrierFreeParallelBlock(blockArgument)
+            )
         }
         return newCall
     }
 
-    private fun containsBarrierCall(expression: IrExpression?): Boolean {
-        if (expression == null) return false
+    private fun analyzeParallelBlock(expression: IrExpression?): ParallelBlockAnalysis {
+        if (expression == null) return ParallelBlockAnalysis(usesBarrier = false, usesReceiver = false)
 
+        val receiverSymbol = (expression as? IrFunctionExpression)?.function?.extensionReceiverParameter?.symbol
         var foundBarrier = false
+        var foundReceiver = false
         expression.acceptChildrenVoid(object : IrElementVisitorVoid {
             override fun visitElement(element: IrElement) {
-                if (!foundBarrier) {
+                if (!foundBarrier || !foundReceiver) {
                     element.acceptChildrenVoid(this)
                 }
             }
@@ -277,7 +299,13 @@ class KotlinMpIrTransformer(
             override fun visitCall(expression: IrCall) {
                 if (expression.symbol.owner.kotlinFqName.asString() == "com.rkh.kotlinmp.ParallelScope.barrier") {
                     foundBarrier = true
-                    return
+                }
+                visitElement(expression)
+            }
+
+            override fun visitGetValue(expression: IrGetValue) {
+                if (receiverSymbol != null && expression.symbol == receiverSymbol) {
+                    foundReceiver = true
                 }
                 visitElement(expression)
             }
@@ -286,7 +314,13 @@ class KotlinMpIrTransformer(
                 visitElement(expression)
             }
         })
-        return foundBarrier
+        return ParallelBlockAnalysis(usesBarrier = foundBarrier, usesReceiver = foundReceiver)
+    }
+
+    private fun adaptBarrierFreeParallelBlock(expression: IrExpression?): IrExpression? {
+        val functionExpression = expression as? IrFunctionExpression ?: return expression
+        functionExpression.function.extensionReceiverParameter = null
+        return functionExpression
     }
 
     private fun extractConstInt(expression: IrExpression?): Int? {
