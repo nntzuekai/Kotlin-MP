@@ -32,12 +32,12 @@ class DynamicScheduleTests {
     }
 
     @Test
-    fun testRangeDynamicChunkedWithConst1() {
-        println("--- Running Dynamic Chunked (Range, Chunk = 1) ---")
+    fun testRangeDynamicChunkSizeOneUsesDefaultPath() {
+        println("--- Running Dynamic (Range, Chunk = 1 optimized to default path) ---")
         val size = 20
         val c = IntArray(size)
 
-        // Passing the const val to test the IR extraction logic
+        // The plugin lowers Schedule.Dynamic(1) to the same trampoline used by Schedule.Dynamic().
         omp {
             parallelFor(0 until size, Schedule.Dynamic(1)) { i ->
                 c[i] = i * 2
@@ -47,7 +47,7 @@ class DynamicScheduleTests {
         for (i in 0 until size) {
             assertEquals(i * 2, c[i], "Chunked computation failed at $i")
         }
-        println("Range Dynamic Chunked Test Passed!\n")
+        println("Range Dynamic Chunk = 1 Optimization Test Passed!\n")
     }
 
     @Test
@@ -100,5 +100,29 @@ class DynamicScheduleTests {
         assertEquals(0, c[1], "Index 1 was skipped, must remain 0")
 
         println("Progression Dynamic Chunked Test Passed!\n")
+    }
+
+    @Test
+    fun testProgressionDynamicChunkSizeOneUsesDefaultPath() {
+        println("--- Running Dynamic (Progression, Chunk = 1 optimized to default path) ---")
+        val size = 20
+        val values = IntArray(size)
+
+        omp {
+            parallelFor(18 downTo 0 step 2, Schedule.Dynamic(1)) { i ->
+                values[i] = i + 1
+            }
+        }
+
+        assertEquals(19, values[18], "Index 18 should be processed")
+        assertEquals(15, values[14], "Index 14 should be processed")
+        assertEquals(11, values[10], "Index 10 should be processed")
+        assertEquals(1, values[0], "Index 0 should be processed")
+
+        assertEquals(0, values[19], "Index 19 was skipped, must remain 0")
+        assertEquals(0, values[17], "Index 17 was skipped, must remain 0")
+        assertEquals(0, values[1], "Index 1 was skipped, must remain 0")
+
+        println("Progression Dynamic Chunk = 1 Optimization Test Passed!\n")
     }
 }
