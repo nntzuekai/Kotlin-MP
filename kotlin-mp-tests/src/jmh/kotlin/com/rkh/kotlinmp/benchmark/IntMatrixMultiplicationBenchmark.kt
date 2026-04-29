@@ -1,4 +1,4 @@
-package com.rkh.kotlinmp.benchmarks
+package com.rkh.kotlinmp.benchmark
 
 import com.rkh.kotlinmp.*
 import kotlinx.coroutines.Dispatchers

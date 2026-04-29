@@ -40,7 +40,7 @@ jmh {
 
     includes.empty()
 //    includes.add(".*MatrixMultiplicationBenchmark.*")
-    includes.add(".FloatMatrixMultiplicationBenchmark.*")
+    includes.add(".IrregularLoadBenchmark.*")
 }
 
 

@@ -4,10 +4,8 @@ Convert JMH-style benchmark text into markdown tables grouped by size,
 and plot benchmark performance vs matrix size.
 
 Usage:
-    python benchmark_to_markdown_and_plot.py input.txt
-
-Or:
-    python benchmark_to_markdown_and_plot.py < input.txt
+    python benchmark_plot.py --scale linear input.txt
+    python benchmark_plot.py --scale log < input.txt
 
 Outputs:
     - Markdown tables printed to stdout
@@ -16,6 +14,7 @@ Outputs:
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from collections import defaultdict
@@ -124,7 +123,15 @@ def convert_to_markdown(grouped_by_size: Dict[int, List[dict]]) -> str:
     return "\n".join(sections).rstrip()
 
 
-def plot_benchmarks(grouped_by_benchmark: Dict[str, List[dict]], output_file: str = "benchmark_plot.png") -> None:
+def is_sequential_benchmark(benchmark_name: str) -> bool:
+    return "sequential" in benchmark_name.lower()
+
+
+def plot_benchmarks(
+    grouped_by_benchmark: Dict[str, List[dict]],
+    output_file: str = "benchmark_plot.png",
+    scale: str = "linear",
+) -> None:
     """
     Plot score vs size for each benchmark and save to a PNG file.
     """
@@ -135,6 +142,9 @@ def plot_benchmarks(grouped_by_benchmark: Dict[str, List[dict]], output_file: st
     plt.figure(figsize=(10, 6))
 
     for benchmark, rows in grouped_by_benchmark.items():
+        if scale == "log" and is_sequential_benchmark(benchmark):
+            continue
+
         sizes = [row["Size"] for row in rows]
         scores = [row["Score"] for row in rows]
         errors = [row["Error"] for row in rows]
@@ -142,12 +152,10 @@ def plot_benchmarks(grouped_by_benchmark: Dict[str, List[dict]], output_file: st
 
         plt.errorbar(sizes, scores, yerr=errors, marker="o", capsize=4, label=label)
 
-    # plt.xscale("log")
-    # plt.yscale("log")
-
     plt.xlabel("Matrix Size")
     plt.ylabel("Time (ms/op)")
-    plt.title("Matrix Multiplication Benchmark Performance")
+    plt.yscale(scale)
+    plt.title(f"Matrix Multiplication Benchmark Performance ({scale.capitalize()} Scale)")
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
@@ -155,23 +163,40 @@ def plot_benchmarks(grouped_by_benchmark: Dict[str, List[dict]], output_file: st
     plt.close()
 
 
-def read_input() -> str:
-    if len(sys.argv) > 1:
-        with open(sys.argv[1], "r", encoding="utf-8") as f:
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("input", nargs="?", help="Benchmark text file. Reads stdin when omitted.")
+    parser.add_argument(
+        "--scale",
+        choices=("linear", "log"),
+        default="linear",
+        help="Y-axis scale for the plot. Sequential series are excluded for log plots.",
+    )
+    parser.add_argument(
+        "--output",
+        default="benchmark_plot.png",
+        help="Output PNG path.",
+    )
+    return parser.parse_args()
+
+
+def read_input(input_path: str | None) -> str:
+    if input_path:
+        with open(input_path, "r", encoding="utf-8") as f:
             return f.read()
     return sys.stdin.read()
 
 
 def main() -> None:
-    text = read_input()
+    args = parse_args()
+    text = read_input(args.input)
     grouped_by_size, grouped_by_benchmark = parse_benchmark_text(text)
 
     markdown_output = convert_to_markdown(grouped_by_size)
     print(markdown_output)
 
-    plot_file = "benchmark_plot.png"
-    plot_benchmarks(grouped_by_benchmark, plot_file)
-    print(f"\nPlot saved to: {plot_file}", file=sys.stderr)
+    plot_benchmarks(grouped_by_benchmark, args.output, args.scale)
+    print(f"\nPlot saved to: {args.output}", file=sys.stderr)
 
 
 if __name__ == "__main__":
